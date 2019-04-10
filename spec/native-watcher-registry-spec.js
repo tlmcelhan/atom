@@ -99,7 +99,12 @@ describe('NativeWatcherRegistry', function () {
     expect(watcher.native).toBe(NATIVE)
   })
 
-  it('reuses an existing NativeWatcher on the same directory', async function () {
+  // debugger
+  global.thisTestIsFlakyAndSlowsDownTheBuild('reuses an existing NativeWatcher on the same directory', async function () {
+    console.log("TRY")
+    // if (this.retries > 0) {
+      throw new Error("X")
+    // }
     const EXISTING = new MockNative('existing')
     const existingPath = absolute('existing', 'path')
     let firstTime = true

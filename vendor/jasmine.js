@@ -506,6 +506,15 @@ var it = function(desc, func) {
 };
 if (isCommonJS) exports.it = it;
 
+var thisTestIsFlakyAndSlowsDownTheBuild = function(desc, func) {
+  var spec = fit(desc, func);
+  spec.focusPriority = 1;
+  spec.retries = 5;
+  spec.originalQueue = spec.queue.clone();
+  return spec;
+}
+if (isCommonJS) exports.thisTestIsFlakyAndSlowsDownTheBuild = thisTestIsFlakyAndSlowsDownTheBuild;
+
 /**
  * Creates a <em>disabled</em> Jasmine spec.
  *
@@ -1069,7 +1078,7 @@ jasmine.Block.prototype.execute = function(onComplete) {
     try {
       this.func.apply(this.spec);
     } catch (e) {
-      this.spec.fail(e);
+      this.spec.fail(e, onComplete);
     }
   }
   onComplete();
@@ -2021,6 +2030,17 @@ jasmine.Queue = function(env) {
   this.abort = false;
 };
 
+jasmine.Queue.prototype.clone = function() {
+  var queue = new jasmine.Queue(this.env);
+  queue.ensured = this.ensured.slice(0)
+  queue.blocks = this.blocks.slice(0)
+  queue.running = this.running;
+  queue.index = this.index;
+  queue.offset = this.offset;
+  queue.abort = this.abort;
+  return queue;
+}
+
 jasmine.Queue.prototype.addBefore = function(block, ensure) {
   if (ensure === jasmine.undefined) {
     ensure = false;
@@ -2330,13 +2350,19 @@ jasmine.Spec.prototype.waitsFor = function(latchFunction, optional_timeoutMessag
   return this;
 };
 
-jasmine.Spec.prototype.fail = function (e) {
-  var expectationResult = new jasmine.ExpectationResult({
-    passed: false,
-    message: e ? jasmine.util.formatException(e) : 'Exception',
-    trace: { stack: e.stack }
-  });
-  this.results_.addResult(expectationResult);
+jasmine.Spec.prototype.fail = function (e, onComplete) {
+  if (this.retries > 0) {
+    this.retries--;
+    this.queue = this.originalQueue.clone();
+    this.suite.add(this)
+  } else {
+    var expectationResult = new jasmine.ExpectationResult({
+      passed: false,
+      message: e ? jasmine.util.formatException(e) : 'Exception',
+      trace: { stack: e.stack }
+    });
+    this.results_.addResult(expectationResult);
+  }
 };
 
 jasmine.Spec.prototype.getMatchersClass_ = function() {
@@ -2584,7 +2610,7 @@ jasmine.WaitsForBlock.prototype.execute = function(onComplete) {
   try {
     latchFunctionResult = this.latchFunction.apply(this.spec);
   } catch (e) {
-    this.spec.fail(e);
+    this.spec.fail(e, onComplete);
     onComplete();
     return;
   }
@@ -2596,7 +2622,7 @@ jasmine.WaitsForBlock.prototype.execute = function(onComplete) {
     this.spec.fail({
       name: 'timeout',
       message: message
-    });
+    }, onComplete);
 
     this.abort = true;
     onComplete();
@@ -2616,7 +2642,7 @@ jasmine.WaitsForBlock.prototype.waitForExplicitCompletion = function(onComplete)
     self.spec.fail({
       name: 'timeout',
       message: message
-    });
+    }, onComplete);
     multiCompletion.cancelled = true;
     self.abort = true;
     onComplete();
@@ -2627,7 +2653,7 @@ jasmine.WaitsForBlock.prototype.waitForExplicitCompletion = function(onComplete)
   try {
     this.latchFunction.apply(this.spec, multiCompletion.completionFunctions);
   } catch (e) {
-    this.spec.fail(e);
+    this.spec.fail(e, onComplete);
     onComplete();
     return;
   }
